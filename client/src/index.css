@@ -1,0 +1,161 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./dark-theme.css";
+
+@custom-variant dark (&:is(.dark *));
+@source "./**/*.{ts,tsx}";
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --primary: oklch(0.43 0.19 256);
+  --primary-foreground: oklch(0.98 0.01 256);
+  --sidebar-primary: oklch(0.64 0.16 252);
+  --sidebar-primary-foreground: oklch(0.98 0.01 256);
+  --chart-1: oklch(0.59 0.19 255);
+  --chart-2: oklch(0.65 0.14 217);
+  --chart-3: oklch(0.63 0.13 159);
+  --chart-4: oklch(0.73 0.13 74);
+  --chart-5: oklch(0.61 0.15 303);
+  --radius: 0.75rem;
+  --background: oklch(0.98 0.004 255);
+  --foreground: oklch(0.19 0.04 256);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.19 0.04 256);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.19 0.04 256);
+  --secondary: oklch(0.95 0.015 255);
+  --secondary-foreground: oklch(0.37 0.08 256);
+  --muted: oklch(0.95 0.01 255);
+  --muted-foreground: oklch(0.52 0.04 256);
+  --accent: oklch(0.94 0.025 253);
+  --accent-foreground: oklch(0.28 0.09 256);
+  --destructive: oklch(0.58 0.22 20);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.9 0.025 255);
+  --input: oklch(0.9 0.025 255);
+  --ring: oklch(0.58 0.17 255);
+  --sidebar: oklch(0.16 0.1 258);
+  --sidebar-foreground: oklch(0.95 0.03 255);
+  --sidebar-accent: oklch(0.24 0.1 256);
+  --sidebar-accent-foreground: oklch(0.98 0.01 255);
+  --sidebar-border: oklch(0.28 0.08 256);
+  --sidebar-ring: oklch(0.58 0.17 255);
+}
+
+.dark {
+  --background: oklch(0.14 0.04 256);
+  --foreground: oklch(0.96 0.015 255);
+  --card: oklch(0.18 0.05 256);
+  --card-foreground: oklch(0.96 0.015 255);
+  --popover: oklch(0.18 0.05 256);
+  --popover-foreground: oklch(0.96 0.015 255);
+  --secondary: oklch(0.23 0.06 256);
+  --secondary-foreground: oklch(0.85 0.03 255);
+  --muted: oklch(0.22 0.05 256);
+  --muted-foreground: oklch(0.74 0.03 255);
+  --accent: oklch(0.25 0.07 256);
+  --accent-foreground: oklch(0.98 0.01 255);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.64 0.17 255);
+  --sidebar: oklch(0.11 0.04 256);
+  --sidebar-foreground: oklch(0.95 0.02 255);
+  --sidebar-accent: oklch(0.22 0.07 256);
+  --sidebar-accent-foreground: oklch(0.98 0 0);
+  --sidebar-border: oklch(1 0 0 / 11%);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html { scroll-behavior: smooth; }
+  body { @apply bg-background text-foreground; font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif; }
+  button:not(:disabled), [role="button"]:not([aria-disabled="true"]), [type="button"]:not(:disabled), [type="submit"]:not(:disabled), a[href], select:not(:disabled), input[type="checkbox"]:not(:disabled), input[type="radio"]:not(:disabled) { @apply cursor-pointer; }
+  ::selection { background: #a8c6ff; color: #0c2765; }
+}
+
+@layer components {
+  .container { width: 100%; margin-left: auto; margin-right: auto; padding-left: 1rem; padding-right: 1rem; }
+  .flex { min-height: 0; min-width: 0; }
+  @media (min-width: 640px) { .container { padding-left: 1.5rem; padding-right: 1.5rem; } }
+  @media (min-width: 1024px) { .container { padding-left: 2rem; padding-right: 2rem; max-width: 1280px; } }
+}
+
+@layer utilities {
+  .blueprint-grid { background-image: linear-gradient(rgba(159, 196, 255, .09) 1px, transparent 1px), linear-gradient(90deg, rgba(159, 196, 255, .09) 1px, transparent 1px); background-size: 28px 28px; }
+  .blueprint-crosshair { position: absolute; width: 18px; height: 18px; border: 1px solid rgba(183, 211, 255, .55); }
+  .blueprint-crosshair::before, .blueprint-crosshair::after { content: ""; position: absolute; background: rgba(183, 211, 255, .55); }
+  .blueprint-crosshair::before { width: 36px; height: 1px; left: -10px; top: 8px; }
+  .blueprint-crosshair::after { width: 1px; height: 36px; left: 8px; top: -10px; }
+  .blueprint-dimension { position: absolute; background: rgba(183, 211, 255, .35); }
+  .blueprint-dimension::before, .blueprint-dimension::after { content: ""; position: absolute; top: -4px; height: 9px; width: 1px; background: rgba(183, 211, 255, .55); }
+  .blueprint-dimension::before { left: 0; }
+  .blueprint-dimension::after { right: 0; }
+}
+
+.brand-mark { transition: transform .2s cubic-bezier(.23,1,.32,1), box-shadow .2s ease; }
+.brand-mark:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(20,76,184,.36); }
+button, a, input, textarea, select { transition: color .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+button:active, a:active { transform: scale(.98); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+
+
+/* ---------------------------------------------------------------- phones and touch screens */
+html { -webkit-text-size-adjust: 100%; }
+button, a, input, select, textarea, [role="tab"], [role="radio"] { touch-action: manipulation; }
+
+@media (max-width: 639px) {
+  /* iOS Safari zooms the whole page when a focused field has text under 16px, so fields are always 16px on phones. */
+  /* `:not(#x)` lifts the specificity above the text-[12px]-style utility classes that fields carry. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(#x), textarea:not(#x), select:not(#x) { font-size: 16px !important; }
+  /* The design uses many 9-13px captions; on a phone every size steps up one notch so nothing is hard to read. */
+  .text-\[9px\], .text-\[10px\] { font-size: 11px !important; }
+  .text-\[11px\] { font-size: 12px !important; }
+  .text-\[12px\] { font-size: 13px !important; }
+  .text-\[13px\] { font-size: 14px !important; }
+}
+
+/* Makes a small link or icon button easier to hit (about 44px) without changing how it looks or the layout around it. */
+/* Only elements that are not already positioned (absolute/fixed/sticky) get `relative`; forcing it would pull an absolutely placed icon button out of position. */
+.tap-area:not(.absolute):not(.fixed):not(.sticky) { position: relative; }
+.tap-area::after { content: ""; position: absolute; inset: -12px -10px; }

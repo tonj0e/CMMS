@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1788712677084,
+      "tag": "0000_shocking_adam_warlock",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1788713687291,
+      "tag": "0001_great_lockjaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1793111849799,
+      "tag": "0002_lonely_roulette",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1793114325078,
+      "tag": "0003_tearful_jocasta",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1793118583141,
+      "tag": "0004_robust_vindicator",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1793121208972,
+      "tag": "0005_abandoned_hobgoblin",
+      "breakpoints": true
+    }
+  ]
+}
