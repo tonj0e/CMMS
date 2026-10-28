@@ -29,7 +29,7 @@ describe("CCMS complaint access boundaries", () => {
       openId: "student-user",
       name: "Student User",
       email: "student@example.com",
-      loginMethod: "manus",
+      loginMethod: "email",
       role: "user",
       createdAt: new Date(),
       updatedAt: new Date(),

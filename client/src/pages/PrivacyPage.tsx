@@ -118,8 +118,8 @@ const STORED = [
 ];
 
 const PROTECTIONS = [
-  "Passwords are hashed with bcrypt. Entering a wrong password or a wrong staff access code is rate limited, so guessing does not work.",
-  "Staff accounts need an access code held by the administrators. Students cannot make themselves staff.",
+  "Passwords are hashed with bcrypt. Entering a wrong password too many times is rate limited, so guessing does not work.",
+  "New staff accounts must be approved by an existing staff member before they can see anything. Students cannot make themselves staff.",
   "Attached files can only be opened by the student who filed the complaint and by staff. A link alone is not enough.",
   "Abusive language is blocked in complaints, feedback and chat, in English, Malayalam and Manglish, before it is saved.",
   "Every status change and remark is recorded with who made it and when, so staff actions can be reviewed.",

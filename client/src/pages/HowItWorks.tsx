@@ -176,7 +176,7 @@ function StaffAccountMock() {
     <Frame title="Staff sign-up">
       <div className="space-y-2.5 py-1">
         <div className="flex items-center gap-2.5 rounded-lg border border-[#e5ebf3] p-2.5"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#dbe6ff] text-[10px] font-extrabold text-[#174cb8]">PS</span><div className="flex-1"><p className="text-[11px] font-bold text-[#18366f]">Priya Staff</p><p className="text-[9px] text-[#8b9ab3]">Staff / Administrator</p></div><Chip tone="bg-[#edf3ff] text-[#2458c4]">Staff</Chip></div>
-        <p className="rounded-lg bg-[#f3f7fd] p-2.5 text-[10px] leading-4 text-[#5d729a]">Name, email and password, plus the staff access code from an administrator.</p>
+        <p className="rounded-lg bg-[#f3f7fd] p-2.5 text-[10px] leading-4 text-[#5d729a]">Name, email and password. An existing staff member approves the account.</p>
       </div>
     </Frame>
   );
@@ -196,7 +196,7 @@ const STUDENT_STEPS: Step[] = [
 ];
 
 const STAFF_STEPS: Step[] = [
-  { icon: UserCheck, title: "Create your staff account", text: "Staff register with just a name, email and password, plus the staff access code from an administrator.", points: ["Open Create account, choose the Staff tab. No Student ID or Admission number is needed.", "The access code is what keeps students from creating staff accounts.", "Then sign in on the same login page and you land on the Command center."], mock: <StaffAccountMock /> },
+  { icon: UserCheck, title: "Create your staff account", text: "Staff register with just a name, email and password.", points: ["Open Create account and choose the Staff tab. No Student ID or Admission number is needed.", "An existing staff member approves every new staff account, so nobody can make themselves staff.", "The very first staff account on a new system is approved automatically. After approval you land on the Command center."], mock: <StaffAccountMock /> },
   { icon: LayoutDashboard, title: "Start at the Command center", text: "One screen shows what needs you right now.", points: ["Needs your attention: complaints waiting 3+ days, serious and open, unassigned, and students waiting for a reply.", "Click any of them to open exactly those complaints.", "Charts for the last 7 days, status, priority, categories and who has how much work."], mock: <DashboardMock /> },
   { icon: Inbox, title: "Work through the Triage inbox", text: "Filter, sort and move complaints forward.", points: ["Tabs for All, Open, Pending, Active, Resolved, Withdrawn, plus priority and sort options.", "Start work or Resolve in one click, or choose a status and add a remark.", "Assign a complaint to a colleague so nothing has no owner."], mock: <TriageMock /> },
   { icon: MessageSquareText, title: "Answer students in Messages", text: "See who is waiting and reply in the same place.", points: ["The To reply tab lists students waiting for an answer.", "You see the Student ID only. Anonymous complaints show no identity at all.", "Replies notify the student immediately."], mock: <StaffChatMock /> },

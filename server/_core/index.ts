@@ -5,7 +5,6 @@ import { rateLimit } from "express-rate-limit";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -46,18 +45,33 @@ async function startServer() {
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ limit: "1mb", extended: true }));
   registerStorageProxy(app);
-  registerOAuthRoutes(app);
   const limiter = (options: { windowMs: number; limit: number; skipSuccessfulRequests?: boolean }) =>
-    rateLimit({ ...options, standardHeaders: "draft-7", legacyHeaders: false, message: { error: "Too many requests, please try again later." } });
-  const authLimiter = limiter({ windowMs: 15 * 60_000, limit: 10, skipSuccessfulRequests: true });
+    rateLimit({
+      ...options,
+      standardHeaders: "draft-7",
+      legacyHeaders: false,
+      // The website talks tRPC, so a plain JSON error is unreadable to it. Answer in tRPC's format, one error per call in a batch,
+      // with a message the page can show as it is ("Too many attempts. Try again in 12 minutes.").
+      handler: (req, res, _next, optionsUsed) => {
+        const resetTime = (req as typeof req & { rateLimit?: { resetTime?: Date } }).rateLimit?.resetTime;
+        const retryAfterSeconds = Math.max(1, Math.ceil((resetTime ? resetTime.getTime() - Date.now() : optionsUsed.windowMs) / 1000));
+        const minutes = Math.ceil(retryAfterSeconds / 60);
+        const message = `Too many attempts. Please try again in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`;
+        const calls = (req.path.split("/").filter(Boolean).pop() ?? "").split(",").length;
+        res.setHeader("Retry-After", String(retryAfterSeconds));
+        res.status(429).json(Array.from({ length: calls }, () => ({ error: { json: { message, code: -32029, data: { code: "TOO_MANY_REQUESTS", httpStatus: 429 } } } })));
+      },
+    });
+  // Relaxed outside production so local test runs do not lock you out.
+  const authLimiter = limiter({ windowMs: 15 * 60_000, limit: process.env.NODE_ENV === "production" ? 10 : 1000, skipSuccessfulRequests: true });
   const registerLimiter = limiter({ windowMs: 60 * 60_000, limit: 10 });
   const trackLimiter = limiter({ windowMs: 60_000, limit: 30 });
   const messageLimiter = limiter({ windowMs: 60_000, limit: 30 });
   const apiLimiter = limiter({ windowMs: 60_000, limit: 600 });
   // httpBatchLink can join procedure names in one URL (a.b,c.d), so match on the path text, not a route.
   app.use("/api/trpc", (req, res, next) => {
-    if (req.path.includes("auth.login") || req.path.includes("auth.changePassword") || req.path.includes("auth.registerStaff")) return authLimiter(req, res, next);
-    if (req.path.includes("auth.register")) return registerLimiter(req, res, next);
+    if (req.path.includes("auth.login") || req.path.includes("auth.changePassword")) return authLimiter(req, res, next);
+    if (req.path.includes("auth.register")) return registerLimiter(req, res, next); // also covers auth.registerStaff
     if (req.path.includes("complaints.track")) return trackLimiter(req, res, next);
     if (req.path.includes("messages.send")) return messageLimiter(req, res, next);
     return apiLimiter(req, res, next);
@@ -78,7 +92,7 @@ async function startServer() {
   }
 
   const preferredPort = parseInt(process.env.PORT || "3000");
-  // A silently shifted port breaks bookmarks, proxies and OAuth redirect URLs, so only auto-shift in development.
+  // A silently shifted port breaks bookmarks and proxies, so only auto-shift in development.
   const port = process.env.NODE_ENV === "production" ? preferredPort : await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {

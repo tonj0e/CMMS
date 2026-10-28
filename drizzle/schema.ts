@@ -9,6 +9,8 @@ export const users = mysqlTable("users", {
   studentId: varchar("studentId", { length: 32 }).unique(),
   admissionNumber: varchar("admissionNumber", { length: 32 }).unique(),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  // A person who signed up as staff stays a normal (student-level) account until an existing staff member approves the request.
+  staffRequestPending: boolean("staffRequestPending").default(false).notNull(),
   passwordHash: varchar("passwordHash", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

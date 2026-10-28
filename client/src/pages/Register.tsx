@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
-import { AlertCircle, CheckCircle, Eye, EyeOff, FileText, GraduationCap, Hash, KeyRound, Loader2, Lock, Mail, Shield, User, UserCog } from "lucide-react";
+import { AlertCircle, CheckCircle, Eye, EyeOff, FileText, GraduationCap, Hash, Loader2, Lock, Mail, Shield, User, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,21 +75,21 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [studentId, setStudentId] = useState("");
   const [admissionNumber, setAdmissionNumber] = useState("");
-  const [accessCode, setAccessCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const utils = trpc.useUtils();
-  const onSuccess = async (data: { user: { name: string | null } }) => {
-    toast.success("Registration successful!", { description: `Welcome ${data.user.name}! Redirecting to your workspace...` });
+  const onSuccess = async (data: { user: { name: string | null }; pending?: boolean }) => {
+    if (data.pending) toast.success("Request sent", { description: "A staff member needs to approve your staff account before you can use it." });
+    else toast.success("Registration successful!", { description: `Welcome ${data.user.name}! Redirecting to your workspace...` });
     await utils.auth.me.fetch();
     navigate("/workspace");
   };
   const onError = (err: { message: string }) => {
     // Server messages name the field that clashed or failed ("Student ID already registered", "...access code is not correct").
-    const field = /^Student ID/.test(err.message) ? "studentId" : /^Admission/.test(err.message) ? "admissionNumber" : /^Email/.test(err.message) ? "email" : /access code/i.test(err.message) ? "accessCode" : null;
+    const field = /^Student ID/.test(err.message) ? "studentId" : /^Admission/.test(err.message) ? "admissionNumber" : /^Email/.test(err.message) ? "email" : null;
     if (field) setErrors({ [field]: err.message });
     toast.error("Registration failed", { description: err.message });
   };
@@ -112,8 +112,6 @@ export default function Register() {
       else if (!ID_PATTERN.test(studentId.trim())) found.studentId = "3-32 characters: letters, numbers, - _ /";
       if (!admissionNumber.trim()) found.admissionNumber = "Admission number is required";
       else if (!ID_PATTERN.test(admissionNumber.trim())) found.admissionNumber = "3-32 characters: letters, numbers, - _ /";
-    } else if (!accessCode.trim()) {
-      found.accessCode = "Enter the staff access code";
     }
     const problem = passwordProblem(password);
     if (problem) found.password = problem;
@@ -127,7 +125,7 @@ export default function Register() {
     if (!validate()) return;
     const common = { name: name.trim(), email: email.trim().toLowerCase(), password };
     if (mode === "student") studentRegister.mutate({ ...common, studentId: studentId.trim(), admissionNumber: admissionNumber.trim() });
-    else staffRegister.mutate({ ...common, accessCode: accessCode.trim() });
+    else staffRegister.mutate(common);
   };
 
   const strength = strengthOf(password);
@@ -192,12 +190,7 @@ export default function Register() {
               </Field>
 
               {mode === "staff" && (
-                <div className="space-y-1.5">
-                  <Field id="accessCode" label="Staff Access Code" icon={KeyRound} error={errors.accessCode}>
-                    <Input id="accessCode" value={accessCode} onChange={e => { setAccessCode(e.target.value); clear("accessCode"); }} placeholder="Given to you by an administrator" className={inputClass("accessCode")} disabled={isLoading} autoComplete="off" spellCheck={false} />
-                  </Field>
-                  <p className="flex items-start gap-1.5 text-[11px] text-[#8b9ab3]"><UserCog className="mt-0.5 h-3.5 w-3.5 shrink-0" />This keeps students from creating staff accounts. Staff do not need a Student ID.</p>
-                </div>
+                <p className="flex items-start gap-2 rounded-xl bg-[#f3f7fd] p-3 text-[11px] leading-4 text-[#5d729a]"><UserCog className="mt-0.5 h-4 w-4 shrink-0 text-[#2458c4]" />Staff do not need a Student ID. A staff member approves new staff accounts before they can use them.</p>
               )}
 
               <div className="space-y-1.5">
@@ -224,9 +217,6 @@ export default function Register() {
           <CardFooter className="flex flex-col gap-3 border-t border-[#f0f4fa] pt-4">
             <p className="text-center text-[11px] text-[#8ba9e9]">By creating an account, you agree to use CCMS for genuine campus complaints only. <Link href="/privacy" className="font-bold underline">How we protect your privacy</Link></p>
             <Link href="/login" className="tap-area text-center text-[12px] font-bold text-[#5d729a] hover:text-[#174cb8]">Already have an account? Sign in</Link>
-            {import.meta.env.DEV && (
-              <Link href="/dev-login" className="tap-area text-center text-[12px] font-bold text-[#b46317] underline hover:text-[#b46317]">Use Development Login (no email required)</Link>
-            )}
           </CardFooter>
         </Card>
 

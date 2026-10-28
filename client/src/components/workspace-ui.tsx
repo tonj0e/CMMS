@@ -120,6 +120,7 @@ export const NOTIFICATION_TITLES: Record<string, string> = {
   new_complaint: "New complaint received",
   message: "New message",
   assigned: "Assignment update",
+  staff_request: "Staff account request",
 };
 
 export function StatCard({ label, value, note, icon: Icon, tone, accent, hideNoteOnPhone }: { label: React.ReactNode; value: string; note: string; icon: React.ComponentType<{ className?: string }>; tone: string; accent?: string; hideNoteOnPhone?: boolean }) {

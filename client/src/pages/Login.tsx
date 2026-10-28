@@ -9,7 +9,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from "@/components/ui/separator";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
-import { startLogin } from "@/const";
 
 type LoginMode = "student" | "staff";
 
@@ -23,13 +22,6 @@ export default function Login() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const utils = trpc.useUtils();
-  // Manus OAuth only works when its portal is configured; email/password is the default.
-  const oauthEnabled = Boolean(import.meta.env.VITE_OAUTH_PORTAL_URL && import.meta.env.VITE_APP_ID);
-
-  const handleOAuthLogin = () => {
-    startLogin();
-  };
-
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: async (data) => {
       toast.success("Login successful!", {
@@ -67,7 +59,7 @@ export default function Login() {
     }
     
     setIsLoading(true);
-    loginMutation.mutate({ email, password });
+    loginMutation.mutate({ email, password, portal: mode });
   };
 
   return (
@@ -125,31 +117,6 @@ export default function Login() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            {oauthEnabled && (
-              <>
-            {/* OAuth Login Button - Primary */}
-              <Button
-                onClick={handleOAuthLogin}
-                className="w-full h-11 rounded-xl bg-[#174cb8] text-white font-bold text-[13px] shadow-[0_8px_20px_rgba(23,76,184,.2)] hover:bg-[#123d9a]"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Redirecting...
-                  </>
-                ) : (
-                  <>
-                    <Mail className="mr-2 h-4 w-4" />
-                    Continue with Campus Account
-                  </>
-                )}
-              </Button>
-  
-              <Separator className="my-4" />
-              </>
-            )}
-
             {/* Credential Login Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
@@ -230,14 +197,6 @@ export default function Login() {
             >
               ← Back to home
             </Link>
-            {import.meta.env.DEV && (
-              <Link
-                href="/dev-login"
-                className="tap-area text-center text-[12px] font-bold text-[#b46317] hover:text-[#b46317] underline"
-              >
-                Use Development Login (no OAuth required)
-              </Link>
-            )}
           </CardFooter>
         </Card>
 

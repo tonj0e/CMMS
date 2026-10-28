@@ -1,26 +1,16 @@
 import { COOKIE_NAME, SESSION_MAX_AGE_MS } from "@shared/const";
 import { z } from "zod";
 import { getSessionCookieOptions } from "./_core/cookies";
-import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getRecentActivity, changeUserPassword, getBadgeSummary, listUnreadByComplaint, updateUserProfile, getAssistantData, countUnreadMessages, countUnreadNotifications, getStaffStats, listConversations, listMessages, markAllNotificationsRead, markMessagesRead, sendMessage, addComplaintAttachment, addFeedback, assignComplaint, createComplaint, getAdminSummary, getComplaintDetail, getPublicComplaint, getUserByOpenId, listAdminComplaints, listStaff, withdrawComplaint, listNotifications, listStudentComplaints, markNotificationRead, registerUser, updateComplaintStatus, verifyPassword } from "./db";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { listPendingStaff, registerStaffUser, reviewStaffRequest, getRecentActivity, changeUserPassword, getBadgeSummary, listUnreadByComplaint, updateUserProfile, getAssistantData, countUnreadMessages, countUnreadNotifications, getStaffStats, listConversations, listMessages, markAllNotificationsRead, markMessagesRead, sendMessage, addComplaintAttachment, addFeedback, assignComplaint, createComplaint, getAdminSummary, getComplaintDetail, getPublicComplaint, getUserByOpenId, listAdminComplaints, listStaff, withdrawComplaint, listNotifications, listStudentComplaints, markNotificationRead, registerUser, updateComplaintStatus, verifyPassword } from "./db";
 import { PROFANITY_MESSAGE, findProfanity } from "@shared/profanity";
 import { answer as answerAssistant } from "./assistant";
 import { storagePut } from "./storage";
-import { ENV } from "./_core/env";
-import { SDKServer, sdk } from "./_core/sdk";
+import { sdk } from "./_core/sdk";
 
 // Letters, digits and - _ / only (e.g. "CS/2021/045"); stored upper-case so lookups and uniqueness are case-insensitive.
 const passwordRule = z.string().min(8).max(72).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, "Password must contain uppercase, lowercase, and number");
-
-/** Constant-time comparison, so the staff access code cannot be guessed from response timing. */
-function matchesStaffAccessCode(candidate: string) {
-  if (!ENV.staffAccessCode) return false;
-  const digest = (value: string) => createHash("sha256").update(value).digest();
-  return timingSafeEqual(digest(candidate), digest(ENV.staffAccessCode));
-}
 
 const idField = (label: string) =>
   z.string().trim().min(3, `${label} must be at least 3 characters`).max(32, `${label} must be at most 32 characters`)
@@ -55,7 +45,6 @@ function toPublicUser<T extends { passwordHash?: string | null }>(user: T): Omit
 }
 
 export const appRouter = router({
-  system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => (opts.ctx.user ? toPublicUser(opts.ctx.user) : null)),
     register: publicProcedure
@@ -77,7 +66,7 @@ export const appRouter = router({
             role: "user",
           });
           
-          const sessionToken = await sdk.createDevSession(openId, user.name ?? "User");
+          const sessionToken = await sdk.createSession(openId, user.name ?? "User");
           const cookieOptions = getSessionCookieOptions(ctx.req);
           ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: SESSION_MAX_AGE_MS });
           
@@ -89,27 +78,16 @@ export const appRouter = router({
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Registration failed" });
         }
       }),
-    // Staff create their own account with name, email and password. The staff access code (set by an administrator) is what stops
-    // a student from simply registering as staff.
+    // Staff sign up with just a name, email and password. Unless they are the very first staff member, the account waits for an
+    // existing staff member to approve it, so nobody can make themselves staff.
     registerStaff: publicProcedure
-      .input(z.object({
-        name: z.string().min(2).max(100),
-        email: z.string().email(),
-        password: passwordRule,
-        accessCode: z.string().trim().min(1, "Enter the staff access code").max(100),
-      }))
+      .input(z.object({ name: z.string().min(2).max(100), email: z.string().email(), password: passwordRule }))
       .mutation(async ({ input, ctx }) => {
-        if (!ENV.staffAccessCode) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Staff sign-up is not switched on. Ask an administrator to set it up." });
-        }
-        if (!matchesStaffAccessCode(input.accessCode)) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "That staff access code is not correct" });
-        }
         try {
-          const { user, openId } = await registerUser({ name: input.name.trim(), email: input.email.trim().toLowerCase(), password: input.password, role: "admin" });
-          const sessionToken = await sdk.createDevSession(openId, user.name ?? "Staff");
+          const { user, openId, pending } = await registerStaffUser({ name: input.name.trim(), email: input.email.trim().toLowerCase(), password: input.password });
+          const sessionToken = await sdk.createSession(openId, user.name ?? "Staff");
           ctx.res.cookie(COOKIE_NAME, sessionToken, { ...getSessionCookieOptions(ctx.req), maxAge: SESSION_MAX_AGE_MS });
-          return { success: true, user: toPublicUser(user) };
+          return { success: true, user: toPublicUser(user), pending };
         } catch (error) {
           if (error instanceof Error && /already registered$/.test(error.message)) throw new TRPCError({ code: "CONFLICT", message: error.message });
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Registration failed" });
@@ -119,6 +97,7 @@ export const appRouter = router({
       .input(z.object({
         email: z.string().email(),
         password: z.string().min(1),
+        portal: z.enum(["student", "staff"]).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         try {
@@ -126,13 +105,19 @@ export const appRouter = router({
             email: input.email.trim().toLowerCase(),
             password: input.password,
           });
-          
-          const sessionToken = await sdk.createDevSession(user.openId, user.name ?? "User");
+
+          // The sign-in tab must match the account type. Checked after the password so it reveals nothing to a guesser.
+          const isStaff = user.role === "admin" || user.staffRequestPending;
+          if (input.portal === "student" && isStaff) throw new TRPCError({ code: "FORBIDDEN", message: "This is a staff account. Please use the Staff tab to sign in." });
+          if (input.portal === "staff" && !isStaff) throw new TRPCError({ code: "FORBIDDEN", message: "This is a student account. Please use the Student tab to sign in." });
+
+          const sessionToken = await sdk.createSession(user.openId, user.name ?? "User");
           const cookieOptions = getSessionCookieOptions(ctx.req);
           ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: SESSION_MAX_AGE_MS });
           
           return { success: true, user: toPublicUser(user) };
         } catch (error) {
+          if (error instanceof TRPCError) throw error;
           if (error instanceof Error && (error.message === "Invalid email or password" || error.message === "Account has no password set")) {
             throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password", cause: { field: "email" } });
           }
@@ -153,26 +138,6 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
-    ...(ENV.devAuthEnabled
-      ? {
-          devLogin: publicProcedure
-            .input(z.object({ role: z.enum(["student", "staff"]) }))
-            .mutation(async ({ input, ctx }) => {
-              if (!ENV.devAuthEnabled) {
-                throw new TRPCError({ code: "FORBIDDEN", message: "Development auth disabled" });
-              }
-              await sdk.ensureDevUsers();
-              const isStudent = input.role === "student";
-              const openId = isStudent ? SDKServer.DEV_STUDENT_OPEN_ID : SDKServer.DEV_STAFF_OPEN_ID;
-              const name = isStudent ? "Demo Student" : "Demo Staff";
-              const sessionToken = await sdk.createDevSession(openId, name);
-              const cookieOptions = getSessionCookieOptions(ctx.req);
-              ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: SESSION_MAX_AGE_MS });
-              const user = await getUserByOpenId(openId);
-              return { success: true, user: user ? toPublicUser(user) : null };
-            }),
-        }
-      : {}),
   }),
   complaints: router({
     track: publicProcedure.input(z.object({ consumerId: z.string().trim().toUpperCase().regex(/^CCMS-\d{4}-\d{6}$/) })).query(({ input }) => getPublicComplaint(input.consumerId)),
@@ -203,7 +168,7 @@ export const appRouter = router({
       if (!matchesMimeType(buffer, input.mimeType)) throw new TRPCError({ code: "BAD_REQUEST", message: "File contents do not match the declared type." });
       if (buffer.byteLength > 10_000_000) throw new TRPCError({ code: "BAD_REQUEST", message: "Attachment exceeds 10 MB." });
       const fileKey = `complaints/${input.complaintId}/${ctx.user.id}-${Date.now()}-${input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-      const uploaded = await storagePut(fileKey, buffer, input.mimeType);
+      const uploaded = await storagePut(fileKey, buffer);
       await addComplaintAttachment({ complaintId: input.complaintId, uploadedByUserId: ctx.user.id, fileKey: uploaded.key, fileUrl: uploaded.url, fileName: input.fileName, mimeType: input.mimeType, sizeBytes: buffer.byteLength });
       return { url: uploaded.url, fileName: input.fileName };
     }),
@@ -237,6 +202,11 @@ export const appRouter = router({
     summary: adminProcedure.input(z.object({ tzOffsetMinutes: z.number().int().min(-840).max(840).default(0) }).default({ tzOffsetMinutes: 0 })).query(({ input }) => getAdminSummary(input.tzOffsetMinutes)),
     listStaff: adminProcedure.query(() => listStaff()),
     conversations: adminProcedure.query(() => listConversations()),
+    pendingRequests: adminProcedure.query(() => listPendingStaff()),
+    reviewRequest: adminProcedure.input(z.object({ userId: z.number().int().positive(), decision: z.enum(["approve", "reject"]) })).mutation(async ({ input }) => {
+      await reviewStaffRequest(input.userId, input.decision);
+      return { success: true } as const;
+    }),
     activity: adminProcedure.input(z.object({ limit: z.number().int().min(1).max(30).default(10) }).default({ limit: 10 })).query(({ input }) => getRecentActivity(input.limit)),
     stats: adminProcedure.input(z.object({ tzOffsetMinutes: z.number().int().min(-840).max(840).default(0) }).default({ tzOffsetMinutes: 0 })).query(({ input }) => getStaffStats(input.tzOffsetMinutes)),
   }),

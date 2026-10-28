@@ -3,7 +3,7 @@ import { PROFANITY_MESSAGE, findProfanity, maskWord } from "@shared/profanity";
 import { STATUS_TRANSITIONS, isConsumerId, normalizeConsumerId, type ComplaintStatus } from "@shared/ccms";
 import { Link, useParams, useLocation } from "wouter";
 import { toast } from "sonner";
-import { AlertCircle, Archive, ArrowUpRight, BarChart3, Bell, Building2, Check, ChevronDown, ClipboardList, Clock3, FileImage, FileText, Filter, FolderOpen, Grid2X2, Headphones, Inbox, LayoutDashboard, LifeBuoy, LockKeyhole, LogOut, Loader2, Menu, MessageSquareText, Monitor, MoreHorizontal, Paperclip, Plus, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Target, UploadCloud, UserRound, UsersRound, X, ArrowLeft, Copy, CheckCircle2, Sun, Moon } from "lucide-react";
+import { AlertCircle, Archive, ArrowUpRight, BarChart3, Bell, Building2, Check, ChevronDown, ClipboardList, Clock3, FileImage, FileText, Filter, FolderOpen, Grid2X2, Headphones, Inbox, LayoutDashboard, LifeBuoy, LockKeyhole, LogOut, Loader2, Menu, MessageSquareText, Monitor, MoreHorizontal, Paperclip, Plus, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Target, UploadCloud, UserRound, UsersRound, X, ArrowLeft, Copy, CheckCircle2, Sun, Moon, UserRoundCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,9 +30,28 @@ const TriageInbox = lazy(() => import("./workspace/TriageInbox"));
 const StaffMessages = lazy(() => import("./workspace/StaffMessages"));
 const Notifications = lazy(() => import("./workspace/Notifications"));
 const StaffOverview = lazy(() => import("./workspace/StaffOverview"));
+const StaffRequests = lazy(() => import("./workspace/StaffRequests"));
 
 function ContentLoader() {
   return <div className="flex h-64 items-center justify-center" role="status" aria-label="Loading"><Loader2 className="h-6 w-6 animate-spin text-[#9fc4ff]" /></div>;
+}
+
+/** Shown instead of the whole workspace while a staff sign-up is waiting for an existing staff member to approve it. */
+function PendingApproval({ name, onCheck, onSignOut }: { name: string; onCheck: () => void; onSignOut: () => void }) {
+  return (
+    <div className="blueprint-app flex min-h-dvh items-center justify-center bg-[#061b56] px-4 py-8">
+      <div className="w-full max-w-md rounded-[20px] border border-[#dbe4f1] bg-white p-7 text-center shadow-[0_20px_60px_rgba(0,0,0,.3)] sm:p-9" role="status">
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#fff4e6] text-[#ba6915]"><Clock3 className="h-7 w-7" /></span>
+        <h1 className="mt-5 text-[22px] font-extrabold tracking-[-.04em] text-[#0b255f]">Waiting for approval</h1>
+        <p className="mt-2 text-[13px] leading-6 text-[#5d729a]">Hi {name.split(/\s+/)[0] || "there"}, your staff account request has been sent. An existing staff member needs to approve it before you can use the staff tools.</p>
+        <p className="mt-3 rounded-xl bg-[#f3f7fd] p-3 text-[12px] leading-5 text-[#5d729a]">This page checks by itself. You can leave it open, or sign in again later.</p>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <Button onClick={onCheck} className="h-11 rounded-xl bg-[#174cb8] text-[12px] font-bold hover:bg-[#123d9a]">Check again</Button>
+          <Button onClick={onSignOut} variant="outline" className="h-11 rounded-xl border-[#cbd8ed] text-[12px] font-bold text-[#31588f]">Sign out</Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function BrandMark({ compact = false }: { compact?: boolean }) {
@@ -61,6 +80,7 @@ function Shell({ children, mode, section, setSection, logout, userName, userEmai
   const summary = trpc.notifications.summary.useQuery(undefined, { refetchInterval: 6_000, retry: false });
   const unreadNotifications = summary.data?.unreadNotifications ?? 0;
   const unreadMessages = summary.data?.unreadMessages ?? 0;
+  const pendingStaff = summary.data?.pendingStaff ?? 0;
 
   // Pop up a toast when something new arrives (a staff reply, a student message, a new complaint). The first load only records
   // what is already there, so old unread items don't all pop up at once.
@@ -97,6 +117,7 @@ function Shell({ children, mode, section, setSection, logout, userName, userEmai
     { id: "inbox", label: "Triage inbox", icon: Inbox },
     { id: "messages", label: "Messages", icon: MessageSquareText, badge: unreadMessages },
     { id: "reports", label: "Reports & trends", icon: BarChart3 },
+    { id: "staff-requests", label: "Staff requests", icon: UserRoundCheck, badge: pendingStaff },
     { id: "notifications", label: "Notifications", icon: Bell, badge: unreadNotifications },
   ];
   const go = (id: string) => { setSection(id); setMobileOpen(false); };
@@ -917,19 +938,29 @@ function Reports() {
 }
 
 export default function Workspace() {
-  const [section, setSection] = useState("overview");
+  const [section, setSection] = useState(() => new URLSearchParams(window.location.search).get("section") ?? "overview");
   const [trackId, setTrackId] = useState<string | null>(null);
   const [triagePreset, setTriagePreset] = useState<TriagePreset | undefined>();
   // Dashboard shortcuts open a section with filters already applied; picking a section from the menu starts clean.
   const goTo = (id: string, preset?: TriagePreset) => { setTriagePreset(id === "inbox" ? preset : undefined); setSection(id); };
-  const { user, logout } = useAuth();
+  const { user, logout, refresh } = useAuth();
 
   const mode: "student" | "staff" = user?.role === "admin" ? "staff" : "student";
 
-  // Switching role (e.g. logging in as someone else) starts from the overview.
+  // Switching role (e.g. logging in as someone else) starts from the overview. The first render keeps a section asked for in the URL.
+  const firstRender = useRef(true);
   useEffect(() => {
+    if (firstRender.current) { firstRender.current = false; return; }
     setSection("overview");
   }, [mode]);
+
+  // A staff sign-up waiting for approval: check again every few seconds so the workspace opens as soon as it is approved.
+  const waiting = !!user?.staffRequestPending;
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setInterval(() => { void refresh(); }, 8_000);
+    return () => clearInterval(timer);
+  }, [waiting, refresh]);
 
 
   const content = mode === "student" ? (
@@ -942,14 +973,17 @@ export default function Workspace() {
     section === "messages" ? <StaffMessages /> :
     section === "inbox" ? <TriageInbox key={JSON.stringify(triagePreset ?? {})} preset={triagePreset} /> :
     section === "reports" ? <Reports /> :
-    section === "notifications" ? <Notifications userId={user?.id ?? 0} /> :
+    section === "staff-requests" ? <StaffRequests /> :
+    section === "notifications" ? <Notifications userId={user?.id ?? 0} onGo={goTo} /> :
     <StaffOverview onGo={goTo} />
   );
+
+  if (waiting) return <PendingApproval name={user?.name ?? ""} onCheck={() => { void refresh(); }} onSignOut={() => { void logout(); }} />;
 
   return (
     <>
       <Shell mode={mode} section={section} setSection={id => goTo(id)} logout={logout} userName={user?.name ?? ""} userEmail={user?.email ?? ""}><Suspense fallback={<ContentLoader />}>{content}</Suspense></Shell>
-      <AssistantWidget role={mode} userName={user?.name} userId={user?.id} />
+      {mode === "staff" && <AssistantWidget role={mode} userName={user?.name} userId={user?.id} />}
     </>
   );
 }

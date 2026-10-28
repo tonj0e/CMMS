@@ -10,7 +10,6 @@ import Home from "./pages/Home";
 // Everything except the landing page is loaded on demand, so a first visit downloads far less JavaScript.
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
-const DevLogin = lazy(() => import("./pages/DevLogin"));
 const ProtectedWorkspace = lazy(() => import("./pages/ProtectedWorkspace"));
 const ComplaintDetail = lazy(() => import("./pages/ComplaintDetail"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -33,7 +32,6 @@ function Router() {
         <Route path="/" component={Home} />
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
-        <Route path="/dev-login" component={DevLogin} />
         <Route path="/track" component={Home} />
         <Route path="/how-it-works" component={HowItWorks} />
         <Route path="/privacy" component={PrivacyPage} />

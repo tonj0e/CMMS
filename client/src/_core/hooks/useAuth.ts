@@ -8,10 +8,6 @@ type UseAuthOptions = {
 };
 
 export function useAuth(options?: UseAuthOptions) {
-  // Login is started via startLogin() in the effect below, only when we actually
-  // navigate — never during render. startLogin() mints a one-time nonce + writes
-  // the state cookie, so calling it per render would overwrite the cookie and
-  // desync it from an in-flight login's `state`.
   const { redirectOnUnauthenticated = false, redirectPath } = options ?? {};
   const utils = trpc.useUtils();
 
@@ -58,7 +54,7 @@ export function useAuth(options?: UseAuthOptions) {
     logoutMutation.isPending,
   ]);
 
-  // Track if we've already attempted OAuth redirect to avoid infinite loops
+  // Only redirect once, to avoid redirect loops
   const redirectAttempted = useRef(false);
 
   useEffect(() => {
@@ -69,7 +65,6 @@ export function useAuth(options?: UseAuthOptions) {
     if (redirectPath && window.location.pathname === redirectPath) return;
     if (redirectAttempted.current) return;
 
-    // Navigate at this moment only. startLogin() mints the nonce + cookie itself.
     window.location.href = redirectPath ?? "/login";
     redirectAttempted.current = true;
   }, [

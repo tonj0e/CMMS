@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { AlertTriangle, ArrowRight, ArrowUpRight, CheckCircle2, ClipboardList, Check, Clock3, Inbox, MessageSquareText, Sparkles, Target, ShieldCheck, UserX } from "lucide-react";
+import { UserRoundCheck, AlertTriangle, ArrowRight, ArrowUpRight, CheckCircle2, ClipboardList, Check, Clock3, Inbox, MessageSquareText, Sparkles, Target, ShieldCheck, UserX } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ export default function StaffOverview({ onGo }: { onGo: (section: string, preset
     { id: "overdue", icon: AlertTriangle, tone: "bg-[#fff4e6] text-[#ba6915]", label: "Waiting 3 days or more", hint: "Pending and untouched", count: s?.overduePending ?? 0, go: () => onGo("inbox", { tab: "Pending", sort: "oldest" }) },
     { id: "serious", icon: Target, tone: "bg-[#fff0f2] text-[#bb3043]", label: "Serious and still open", hint: "High and Critical priority", count: serious, go: () => onGo("inbox", { tab: "Open", priority: "serious", sort: "priority" }) },
     { id: "unassigned", icon: UserX, tone: "bg-[#edf3ff] text-[#2458c4]", label: "Not assigned to anyone", hint: "Open complaints without an owner", count: s?.unassignedOpen ?? 0, go: () => onGo("inbox", { tab: "Open", unassigned: true, sort: "priority" }) },
+    { id: "staff", icon: UserRoundCheck, tone: "bg-[#fff4e6] text-[#ba6915]", label: "Staff waiting for approval", hint: "New staff accounts", count: s?.pendingStaffRequests ?? 0, go: () => onGo("staff-requests") },
     { id: "unread", icon: MessageSquareText, tone: "bg-[#f3efff] text-[#7653c4]", label: "Students waiting for a reply", hint: "Unread messages", count: unreadMessages, go: () => onGo("messages") },
   ];
   const needsAction = attention.some(a => a.count > 0);

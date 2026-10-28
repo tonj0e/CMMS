@@ -294,7 +294,7 @@ export async function getAdminSummary(tzOffsetMinutes = 0) {
 
   const openStatuses = ["Pending", "In Progress"] as const;
   const overdueBefore = new Date(Date.now() - 3 * dayMs);
-  const [counts, byCategory, resolution, rating, recent, openByPriority, workload, overdue] = await Promise.all([
+  const [counts, byCategory, resolution, rating, recent, openByPriority, workload, overdue, pendingStaffRequests] = await Promise.all([
     db.select({ status: complaints.status, count: sql<number>`count(*)` }).from(complaints).groupBy(complaints.status),
     db.select({ category: complaints.category, count: sql<number>`count(*)` }).from(complaints).groupBy(complaints.category).orderBy(desc(sql`count(*)`)),
     db.select({
@@ -310,6 +310,7 @@ export async function getAdminSummary(tzOffsetMinutes = 0) {
       .from(complaints).leftJoin(users, eq(complaints.assignedAdminId, users.id))
       .where(inArray(complaints.status, [...openStatuses])).groupBy(complaints.assignedAdminId, users.name, users.email),
     db.select({ count: sql<number>`count(*)` }).from(complaints).where(and(eq(complaints.status, "Pending"), lt(complaints.createdAt, overdueBefore))),
+    countPendingStaff(),
   ]);
 
   const perDay = new Map<number, number>();
@@ -340,6 +341,7 @@ export async function getAdminSummary(tzOffsetMinutes = 0) {
     last7Days,
     openByPriority: { Critical: 0, High: 0, Medium: 0, Low: 0, ...Object.fromEntries(openByPriority.map(r => [r.priority, Number(r.count)])) } as Record<"Critical" | "High" | "Medium" | "Low", number>,
     overduePending: Number(overdue[0]?.count ?? 0),
+    pendingStaffRequests,
     unassignedOpen: workload.filter(w => w.adminId === null).reduce((sum, w) => sum + Number(w.count), 0),
     workload: workload.filter(w => w.adminId !== null).map(w => ({ adminId: w.adminId as number, name: w.name ?? w.email ?? `Staff #${w.adminId}`, count: Number(w.count) })).sort((a, b) => b.count - a.count).slice(0, 8),
   };
@@ -382,6 +384,7 @@ export async function addComplaintAttachment(input: {
 export async function registerUser(input: {
   email: string;
   name: string;
+  staffRequestPending?: boolean;
   studentId?: string;
   admissionNumber?: string;
   password: string;
@@ -416,6 +419,7 @@ export async function registerUser(input: {
       email: input.email,
       studentId: input.studentId ?? null,
       admissionNumber: input.admissionNumber ?? null,
+      staffRequestPending: input.staffRequestPending ?? false,
       loginMethod: "local",
       role: input.role,
       passwordHash,
@@ -664,14 +668,15 @@ export async function changeUserPassword(userId: number, currentPassword: string
 /** One cheap call that drives the sidebar/bell badges and the pop-up toast, instead of several polled queries. */
 export async function getBadgeSummary(viewer: Viewer) {
   const db = await getDb();
-  const [unreadNotifications, unreadMessages, latest] = await Promise.all([
+  const [unreadNotifications, unreadMessages, latest, pendingStaff] = await Promise.all([
     countUnreadNotifications(viewer.id),
     countUnreadMessages(viewer),
     db.select({ id: notifications.id, type: notifications.type, message: notifications.message, complaintId: notifications.complaintId })
       .from(notifications).where(and(eq(notifications.userId, viewer.id), eq(notifications.isRead, false)))
       .orderBy(desc(notifications.id)).limit(1),
+    viewer.isAdmin ? countPendingStaff() : Promise.resolve(0),
   ]);
-  return { unreadNotifications, unreadMessages, latest: latest[0] ?? null };
+  return { unreadNotifications, unreadMessages, latest: latest[0] ?? null, pendingStaff };
 }
 
 /** Which complaints have messages waiting for this viewer, and how many. */
@@ -685,4 +690,51 @@ export async function listUnreadByComplaint(viewer: Viewer) {
     .groupBy(complaintMessages.complaintId)
     .orderBy(desc(sql`max(${complaintMessages.createdAt})`));
   return rows.map(r => ({ complaintId: r.complaintId, count: Number(r.count) }));
+}
+
+
+// ---------------------------------------------------------------- staff sign-up requests
+
+/**
+ * Staff create their own account with a name, email and password. To stop anyone from simply making themselves staff, the account
+ * is a normal one marked "waiting for approval" until an existing staff member approves it. The very first staff account on a
+ * brand-new system (when nobody is staff yet) is approved automatically, otherwise nobody could ever approve anyone.
+ */
+export async function registerStaffUser(input: { name: string; email: string; password: string }) {
+  const db = await getDb();
+  const [row] = await db.select({ count: sql<number>`count(*)` }).from(users).where(eq(users.role, "admin"));
+  const firstStaff = Number(row?.count ?? 0) === 0;
+  const created = await registerUser({ ...input, role: firstStaff ? "admin" : "user", staffRequestPending: !firstStaff });
+  if (!firstStaff) {
+    const admins = await db.select({ id: users.id }).from(users).where(eq(users.role, "admin"));
+    if (admins.length) {
+      await db.insert(notifications).values(admins.map(a => ({ userId: a.id, type: "staff_request", message: `${input.name} (${input.email}) asked for a staff account.` })));
+    }
+  }
+  return { ...created, pending: !firstStaff };
+}
+
+export async function listPendingStaff() {
+  const db = await getDb();
+  return db.select({ id: users.id, name: users.name, email: users.email, createdAt: users.createdAt })
+    .from(users).where(eq(users.staffRequestPending, true)).orderBy(users.createdAt);
+}
+
+export async function countPendingStaff() {
+  const db = await getDb();
+  const [row] = await db.select({ count: sql<number>`count(*)` }).from(users).where(eq(users.staffRequestPending, true));
+  return Number(row?.count ?? 0);
+}
+
+export async function reviewStaffRequest(userId: number, decision: "approve" | "reject") {
+  const db = await getDb();
+  const [target] = await db.select({ id: users.id, pending: users.staffRequestPending }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!target?.pending) throw new TRPCError({ code: "NOT_FOUND", message: "That request no longer exists" });
+  if (decision === "approve") {
+    await db.update(users).set({ role: "admin", staffRequestPending: false }).where(eq(users.id, userId));
+  } else {
+    // A pending account could not use the app, so it owns no complaints or messages and can be removed cleanly.
+    await db.delete(notifications).where(eq(notifications.userId, userId));
+    await db.delete(users).where(and(eq(users.id, userId), eq(users.staffRequestPending, true)));
+  }
 }

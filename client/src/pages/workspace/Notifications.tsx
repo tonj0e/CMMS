@@ -16,7 +16,7 @@ const TABS: { id: Tab; label: string; match: (n: Item) => boolean }[] = [
   { id: "unread", label: "Unread", match: n => !n.isRead },
   { id: "complaints", label: "Complaints", match: n => n.type === "new_complaint" || n.type === "submitted" },
   { id: "messages", label: "Messages", match: n => n.type === "message" },
-  { id: "updates", label: "Updates", match: n => n.type === "status_changed" || n.type === "assigned" },
+  { id: "updates", label: "Updates", match: n => n.type === "status_changed" || n.type === "assigned" || n.type === "staff_request" },
 ];
 
 const LOOK: Record<string, { icon: React.ComponentType<{ className?: string }>; tone: string }> = {
@@ -25,9 +25,10 @@ const LOOK: Record<string, { icon: React.ComponentType<{ className?: string }>; 
   message: { icon: MessageSquareText, tone: "bg-[#f3efff] text-[#7653c4]" },
   status_changed: { icon: Check, tone: "bg-[#eaf2ff] text-[#2458c4]" },
   assigned: { icon: UserRoundCheck, tone: "bg-[#e9f7ff] text-[#1684b5]" },
+  staff_request: { icon: UserRoundCheck, tone: "bg-[#fff4e6] text-[#ba6915]" },
 };
 
-export default function Notifications({ userId }: { userId: number }) {
+export default function Notifications({ userId, onGo }: { userId: number; onGo?: (section: string) => void }) {
   const utils = trpc.useUtils();
   const [, navigate] = useLocation();
   const { data, isLoading, error, refetch } = trpc.notifications.list.useQuery(undefined, { enabled: !!userId, retry: false, refetchInterval: 15_000 });
@@ -62,7 +63,8 @@ export default function Notifications({ userId }: { userId: number }) {
 
   const open = (item: Item) => {
     if (!item.isRead) markRead.mutate({ id: item.id });
-    if (item.complaintId) navigate(`/workspace/complaints/${item.complaintId}`);
+    if (item.type === "staff_request") onGo?.("staff-requests");
+    else if (item.complaintId) navigate(`/workspace/complaints/${item.complaintId}`);
   };
 
   if (error) return <QueryError message={error.message} onRetry={() => refetch()} />;

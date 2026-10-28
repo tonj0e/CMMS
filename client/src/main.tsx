@@ -17,8 +17,8 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
-  // Send logged-out users to our own sign-in page (not the Manus OAuth portal).
-  const publicPaths = ["/", "/login", "/register", "/dev-login", "/track"];
+  // Send logged-out users to our own sign-in page .
+  const publicPaths = ["/", "/login", "/register", "/track", "/how-it-works", "/privacy"];
   if (publicPaths.includes(window.location.pathname)) return;
   window.location.assign("/login");
 };

@@ -12,7 +12,7 @@ function ctxFor(user: TrpcContext["user"]): TrpcContext {
 
 const student = {
   id: 7, openId: "local_x", name: "S", email: "s@example.com", loginMethod: "local",
-  role: "user" as const, passwordHash: "$2b$12$secret", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date(),
+  role: "user" as const, staffRequestPending: false, passwordHash: "$2b$12$secret", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date(),
 };
 
 describe("security", () => {
@@ -52,10 +52,18 @@ describe("security", () => {
     await expect(appRouter.createCaller(ctxFor(student)).messages.send({ complaintId: 1, body: "you are an idiot" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
-  it("staff sign-up is refused unless an administrator has set a staff access code", async () => {
-    // No STAFF_ACCESS_CODE exists in the unit-test environment, so nobody can register as staff, whatever code they type.
-    await expect(
-      appRouter.createCaller(ctxFor(null)).auth.registerStaff({ name: "Intruder", email: "intruder@example.com", password: "Passw0rdX", accessCode: "anything" }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  it("a staff sign-up that is waiting for approval cannot use any signed-in feature", async () => {
+    const pending = { ...student, role: "user" as const, staffRequestPending: true };
+    const caller = appRouter.createCaller(ctxFor(pending));
+    await expect(caller.complaints.mine()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.notifications.summary()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.staff.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    // but they can still see who they are, so the waiting screen can show
+    expect((await caller.auth.me())?.staffRequestPending).toBe(true);
+  });
+
+  it("only staff can approve or decline staff requests", async () => {
+    await expect(appRouter.createCaller(ctxFor(student)).staff.reviewRequest({ userId: 5, decision: "approve" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(appRouter.createCaller(ctxFor(null)).staff.pendingRequests()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

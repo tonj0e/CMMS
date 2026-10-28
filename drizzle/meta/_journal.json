@@ -43,6 +43,13 @@
       "when": 1793121208972,
       "tag": "0005_abandoned_hobgoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1793131682320,
+      "tag": "0006_goofy_yellow_claw",
+      "breakpoints": true
     }
   ]
 }

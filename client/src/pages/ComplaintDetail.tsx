@@ -86,6 +86,7 @@ export default function ComplaintDetail() {
 
   const { data: user } = trpc.auth.me.useQuery(undefined, { retry: false });
   const isAdmin = user?.role === "admin";
+  const [downloading, setDownloading] = useState(false);
 
   // Status update mutation for staff
   const updateStatusMutation = trpc.staff.updateStatus.useMutation({
@@ -142,6 +143,48 @@ export default function ComplaintDetail() {
 
   const { complaint, history, attachments } = detail;
 
+  const copyTrackingId = async () => {
+    try {
+      await navigator.clipboard.writeText(complaint.consumerId);
+      toast.success("Tracking ID copied", { description: complaint.consumerId });
+    } catch {
+      toast.error("Could not copy. Select the ID and copy it by hand.");
+    }
+  };
+
+  const openConversation = () => {
+    const box = document.getElementById("complaint-conversation");
+    box?.scrollIntoView({ behavior: "smooth", block: "center" });
+    box?.querySelector("textarea, input")?.dispatchEvent(new Event("focus"));
+    (box?.querySelector("textarea, input") as HTMLElement | null)?.focus({ preventScroll: true });
+  };
+
+  // Fetches each file with the session cookie, then saves it under its original name.
+  const downloadAll = async () => {
+    setDownloading(true);
+    let saved = 0;
+    for (const att of attachments) {
+      try {
+        const res = await fetch(att.fileUrl, { credentials: "include" });
+        if (!res.ok) throw new Error(String(res.status));
+        const url = URL.createObjectURL(await res.blob());
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = att.fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        saved++;
+        await new Promise(r => setTimeout(r, 300));
+      } catch {
+        toast.error(`Could not download ${att.fileName}`);
+      }
+    }
+    setDownloading(false);
+    if (saved) toast.success(saved === 1 ? "Attachment downloaded" : `${saved} attachments downloaded`);
+  };
+
   return (
     <div className="blueprint-app min-h-dvh bg-[#061b56]">
       <div className="mx-auto max-w-[1440px] px-5 py-7 lg:px-9">
@@ -161,7 +204,7 @@ export default function ComplaintDetail() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 rounded-full border border-[#d7e2f4] bg-white px-3 py-1.5 text-[10px] font-bold text-[#6b7e9d]">
               <Copy className="h-3.5 w-3.5" />
-              <span onClick={() => { navigator.clipboard.writeText(complaint.consumerId); toast.success("Copied!"); }} className="cursor-pointer">{complaint.consumerId}</span>
+              <span onClick={copyTrackingId} className="cursor-pointer">{complaint.consumerId}</span>
             </div>
             {!isAdmin && complaint.status === "Pending" && (
               <button
@@ -312,7 +355,7 @@ export default function ComplaintDetail() {
             )}
 
             {/* Conversation between the student and staff */}
-            <ComplaintChat complaintId={complaint.id} viewer={isAdmin ? "staff" : "student"} closed={complaint.status === "Withdrawn"} />
+            <div id="complaint-conversation" className="scroll-mt-6"><ComplaintChat complaintId={complaint.id} viewer={isAdmin ? "staff" : "student"} closed={complaint.status === "Withdrawn"} /></div>
 
             {/* Feedback */}
             {!isAdmin && complaint.status === "Resolved" && (
@@ -327,18 +370,18 @@ export default function ComplaintDetail() {
               <CardContent className="p-5">
                 <p className="mb-4 text-[12px] font-bold uppercase tracking-[.1em] text-[#7788a5]">Quick Actions</p>
                 <div className="space-y-2">
-                  <Button variant="outline" className="w-full justify-start gap-3" onClick={() => navigator.clipboard.writeText(complaint.consumerId)}>
+                  <Button variant="outline" className="w-full justify-start gap-3" onClick={copyTrackingId}>
                     <Copy className="h-4 w-4" />
                     Copy Tracking ID
                   </Button>
-                  <Button variant="outline" className="w-full justify-start gap-3">
+                  <Button variant="outline" className="w-full justify-start gap-3" onClick={openConversation} disabled={complaint.status === "Withdrawn"}>
                     <MessageSquare className="h-4 w-4" />
-                    Contact Support
+                    {isAdmin ? "Message student" : "Message staff"}
                   </Button>
                   {attachments.length > 0 && (
-                    <Button variant="outline" className="w-full justify-start gap-3">
+                    <Button variant="outline" className="w-full justify-start gap-3" onClick={downloadAll} disabled={downloading}>
                       <Download className="h-4 w-4" />
-                      Download All Attachments
+                      {downloading ? "Downloading…" : attachments.length > 1 ? `Download all attachments (${attachments.length})` : "Download attachment"}
                     </Button>
                   )}
                 </div>

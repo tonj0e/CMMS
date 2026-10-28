@@ -17,6 +17,10 @@ const requireUser = t.middleware(async opts => {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
   }
 
+  if (ctx.user.staffRequestPending) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Your staff account is waiting for approval from an existing staff member." });
+  }
+
   return next({
     ctx: {
       ...ctx,
